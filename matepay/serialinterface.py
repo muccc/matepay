@@ -12,7 +12,7 @@ class SerialInterface(threading.Thread):
       self.portopen = False
       self.dummy = False
       self.daemon = True
-      self._messages = Queue.Queue()
+      self._messages = {}
       self._logger = logging.getLogger(__name__)
 
       if path2device == '/dev/null':
@@ -136,14 +136,19 @@ class SerialInterface(threading.Thread):
                 elif data[0] == 'E':
                     self._logger.error(data[1:])
             else:
-                self._messages.put((channel, data))
+                if channel in self._messages:
+                    self._messages[channel].put(data)
     
-    def get_message(self, timeout = None):
+    def get_message(self, channel, block = True, timeout = None):
         try:
-            if timeout == None:
-                timeout = self.timeout
-
-            return self._messages.get(timeout = timeout)
+            data = self._messages[channel].get(block = block, timeout = timeout)
+            return data
         except Queue.Empty:
-            return False, ''
+            return False
+ 
+    def create_channel(self, channel):
+        try:
+            self._messages[channel] = Queue.Queue()
+        except:
+            pass
         

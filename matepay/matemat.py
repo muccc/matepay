@@ -1,28 +1,52 @@
-import time, sys
-sys.path.insert(0, '.')
-
 import serialinterface
 from decimal import Decimal
+import threading
+import sys
 
-class Matemat(object):
+class Matemat(threading.Thread):
     def __init__(self):
+        threading.Thread.__init__(self)
+        self.daemon = True
         self.interface = serialinterface.SerialInterface('/dev/ttyUSB0',
                 115200, timeout = 5)
         
         self.pricelines = {1: {'cost': Decimal("1.5")}, 3: {'cost': Decimal("1.0")}}
 
+        self.interface.create_channel('C')
+        self.interface.create_channel('T')
         self.interface.start()
+        self.start()
+
+    def run(self):
+        import re, pfu
+        r = re.compile("temp([0-1])=([+,-][0-9]+\\.[0-9])")
+        channels = ("temp", "mitte")
+
+        while len(sys.argv) > 1:
+            data = self.interface.get_message(channel = 'T', block = True, timeout = None)
+            
+            m = r.match(data)
+            if m:
+                channel = channels[int(m.groups()[0])]
+                temperature = float(m.groups()[1])
+                try:
+                    feed = pfu.PachubeFeedUpdate("65835", sys.argv[1])
+                    feed.addDatapoint(channel, temperature)
+                    feed.buildUpdate()
+                    feed.sendUpdate()
+                except Exception as e:
+                    print e
 
     def getMessage(self):
-        return self.interface.get_message()
+        return self.interface.get_message(channel = 'C', block = True, timeout = 5)
 
     def _waitForReply(self,reply):
         #self.log.debug('reply=%s' % reply)
         print 'reply=%s' % reply
         while True:
-            command, data = self.getMessage()
-            print "read message", command, data
-            if command == False:
+            data = self.getMessage()
+            print "read message", data
+            if data == False:
                 return False
             if data in reply:
                 #self.log.debug('msg=%s' % msg)
@@ -32,14 +56,14 @@ class Matemat(object):
     def writeLCD(self, msg):
         #self.log.info('writeLCD(): msg=%s' % msg)
         msg = "d"+msg
-        self.interface.writeMessage('0', msg);
+        self.interface.writeMessage('C', msg);
         return self._waitForReply(["dD"])
     
     def getCost(self):
-        self.interface.writeMessage('0', "p")
-        command, data = self.getMessage()
+        self.interface.writeMessage('C', "p")
+        data = self.getMessage()
 
-        if command == False:
+        if data == False:
             return -1
 
         if data[0] == 'p':
@@ -53,7 +77,7 @@ class Matemat(object):
 
     def serve(self):
         #self.log.info('priceline=%s' % priceline)
-        self.interface.writeMessage('0', "s"+str(self._last_priceline))
+        self.interface.writeMessage('C', "s"+str(self._last_priceline))
         ret = self._waitForReply(["sO","sN"])
         if ret == False:
             return False
@@ -66,6 +90,7 @@ class Matemat(object):
 
 # "Testing"
 if __name__ == '__main__':
+    import time
     m = Matemat()
     m.start()
     m.writeLCD("luvv")
