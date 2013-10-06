@@ -6,8 +6,6 @@
 # this stuff is worth it, you can buy me a mate in return.
 # ----------------------------------------------------------------------------
 
-import socket
-import sys
 import time
 import threading
 import nupay
@@ -25,9 +23,9 @@ class Matepay(threading.Thread):
             import matemat_sim as matemat
 
         self.matemat = matemat.Matemat()
-        self.matemat.start()
         self.token_reader = nupay.USBTokenReader()
-        while 1:
+
+        while True:
             try:
                 self.matemat.writeLCD('connecting...')
                 self.session_manager = nupay.SessionManager()
@@ -35,12 +33,10 @@ class Matepay(threading.Thread):
             except nupay.SessionConnectionError as e:
                 self.report("upay unavailable", wait=3)
 
-        self.pricelines = {1: {'cost': Decimal("1")}, 3: {'cost': Decimal("1.5")}}
- 
     def go(self):
         self.matemat.writeLCD('OBEY AND CONSUME')
         
-        print("Waiting for purse")
+        self._logger.debug("Waiting for purse")
         
         while True: 
             try:
@@ -49,7 +45,7 @@ class Matepay(threading.Thread):
             except nupay.NoTokensAvailableError:
                 time.sleep(1)
 
-        print("Read %d tokens" % len(tokens))
+        self._logger.debug("Read %d tokens" % len(tokens))
        
         with self.session_manager.create_session() as session:
             session.validate_tokens(tokens)
@@ -58,34 +54,35 @@ class Matepay(threading.Thread):
             self.report('Credit: %.02f Eur' % session.credit)
 
             while self.token_reader.medium_valid:
-                priceline = self.matemat.getPriceline()
-                if priceline == -1:
+                cost = self.matemat.getCost()
+                if cost == -1:
                     self.report('TIMEOUT', 3)
                     return
-                elif priceline != 0:
-                    self._logger.info('priceline=%s' % priceline)
+                elif cost != 0:
+                    self._logger.info('cost=%s' % cost)
                     break
-                time.sleep(0.01)
+                time.sleep(0.1)
             
             if not self.token_reader.medium_valid:
                 self.report('Next time ;)', 3)
                 return
-            try: 
-                transaction = session.cash(self.pricelines[priceline]['cost'])
 
-                if self.matemat.serve(priceline):
-                    self._logger.info('Serving %s' % priceline)
+            try: 
+                transaction = session.cash(cost)
+
+                if self.matemat.serve():
+                    self._logger.info('Serving')
                     self.report('%.02f Eur left' % session.credit, 3)
                 else:
-                    self._logger.info('Failed to serve %s' % priceline)
+                    self._logger.info('Failed to serve')
                     self.report('Failed to serve!', 3)
                     session.rollback(transaction)
-                    return
 
                 if False: #not self.matemat.completeserve():
-                    self._logger.info('Failed to complete serve %s' % priceline)
+                    self._logger.info('Failed to complete serve')
                     self.report('Failed to cserve!', 3)
-                    self.token.rollback(priceline)
+                    session.rollback(cost)
+
             except nupay.NotEnoughCreditError as e:
                 self.report('%.02f Eur missing' % e[0][1], 3)
                 return
@@ -103,8 +100,8 @@ class Matepay(threading.Thread):
 #self.report('ERR: %s' % data[:15], 3)
 #self.report('Credit: %s' % self.token.tokencount)
 
-    def run(self):
-        while 1:
+    def serve(self):
+        while True:
             try:
                 self.go()
             except nupay.SessionConnectionError as e:
@@ -112,12 +109,11 @@ class Matepay(threading.Thread):
             except nupay.SessionError as e:
                 self.report('upay terminated', 3)
             except Exception as e:
+                self.report('see error log', 3)
                 self._logger.warning("unhandled exception", exc_info=True)
 
-# "Testing"
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    co = Matepay()
-    co.start()
-    co.join()
+    matepay = Matepay()
+    matepay.serve()
 

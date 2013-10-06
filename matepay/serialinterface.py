@@ -2,11 +2,18 @@ import serial
 import string
 import sys
 import time
+import threading
+import Queue
+import logging
 
-class SerialInterface:
+class SerialInterface(threading.Thread):
     def  __init__ ( self, path2device, baudrate, timeout=0):
+      threading.Thread.__init__(self)
       self.portopen = False
       self.dummy = False
+      self.daemon = True
+      self._messages = Queue.Queue()
+      self._logger = logging.getLogger(__name__)
 
       if path2device == '/dev/null':
             self.dummy = True
@@ -23,7 +30,7 @@ class SerialInterface:
             if timeout:
                 self.ser.setTimeout(timeout)
             self.portopen = True
-            self.last = time.time()
+            #self.last = time.time()
 
         except serial.SerialException:
             print "Exception while opening", path2device
@@ -109,10 +116,34 @@ class SerialInterface:
                 start = False
             elif stop:
                 #print 'received message: len=%d data=%s'%(len(data),data)
-                print 'received message. command=',command, "data=" ,list(data)
+                #print 'received message. command=',command, "data=" ,list(data)
                 #print time.time() - self.last
-                self.last = time.time()
+                #self.last = time.time()
                 return (command, data)
             elif escaped == False and inframe:
                 data += str(d)
+    
+    def run(self):
+        while True:
+            channel, data = self.readMessage() 
+            if channel == 'D':
+                if data[0] == 'D':
+                    self._logger.debug(data[1:])
+                elif data[0] == 'I':
+                    self._logger.info(data[1:])
+                elif data[0] == 'W':
+                    self._logger.warning(data[1:])
+                elif data[0] == 'E':
+                    self._logger.error(data[1:])
+            else:
+                self._messages.put((channel, data))
+    
+    def get_message(self, timeout = None):
+        try:
+            if timeout == None:
+                timeout = self.timeout
 
+            return self._messages.get(timeout = timeout)
+        except Queue.Empty:
+            return False, ''
+        
