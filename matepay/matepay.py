@@ -31,7 +31,7 @@ class Matepay(threading.Thread):
                 self.session_manager = nupay.SessionManager()
                 break;
             except nupay.SessionConnectionError as e:
-                self.report("upay unavailable", wait=3)
+                self.report("upay unavailable", wait = 3)
 
     def go(self):
         self.matemat.writeLCD('OBEY AND CONSUME')
@@ -56,15 +56,14 @@ class Matepay(threading.Thread):
             while self.token_reader.medium_valid:
                 cost = self.matemat.getCost()
                 if cost == -1:
-                    self.report('TIMEOUT', 3)
+                    self.report('TIMEOUT', wait = 3)
                     return
                 elif cost != 0:
                     self._logger.info('cost=%s' % cost)
                     break
                 time.sleep(0.1)
-            
-            if not self.token_reader.medium_valid:
-                self.report('Next time ;)', 3)
+            else: 
+                self.report('Next time ;)', wait = 3)
                 return
 
             try: 
@@ -72,7 +71,7 @@ class Matepay(threading.Thread):
 
                 if self.matemat.serve():
                     self._logger.info('Serving')
-                    self.report('%.02f Eur left' % session.credit, 3)
+                    self.report('%.02f Eur left' % session.credit, wait = 3)
                 else:
                     self._logger.info('Failed to serve')
                     self.report('Failed to serve!', 3)
@@ -84,7 +83,7 @@ class Matepay(threading.Thread):
                     session.rollback(cost)
 
             except nupay.NotEnoughCreditError as e:
-                self.report('%.02f Eur missing' % e[0][1], 3)
+                self.report('%.02f Eur missing' % e[0][1], wait = 3)
                 return
 
         #print("Waiting for medium to vanish")
@@ -105,11 +104,11 @@ class Matepay(threading.Thread):
             try:
                 self.go()
             except nupay.SessionConnectionError as e:
-                self.report('upay unavailable', 3)
+                self.report('upay unavailable', wait = 3)
             except nupay.SessionError as e:
-                self.report('upay terminated', 3)
+                self.report('upay terminated', wait = 3)
             except Exception as e:
-                self.report('see error log', 3)
+                self.report('see error log', wait = 3)
                 self._logger.warning("unhandled exception", exc_info=True)
 
 if __name__ == '__main__':
