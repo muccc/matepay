@@ -24,12 +24,13 @@ class Matepay(threading.Thread):
 
         self.matemat = matemat.Matemat()
         self.token_reader = nupay.USBTokenReader()
+        self.collectors = [nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat')]
 
         while True:
             try:
                 self.matemat.writeLCD('connecting...')
-                self.session_manager = nupay.SessionManager()
-                break;
+                self.session_manager = nupay.SessionManager(collectors = self.collectors)
+                break
             except nupay.SessionConnectionError as e:
                 self.report("upay unavailable", wait = 3)
 
@@ -50,8 +51,9 @@ class Matepay(threading.Thread):
         with self.session_manager.create_session() as session:
             session.validate_tokens(tokens)
             
-            self._logger.debug('credit=%.02f Eur' % session.credit)
-            self.report('Credit: %.02f Eur' % session.credit)
+            msg = 'Credit: %.02f Eur' % (session.credit)
+            self._logger.debug(msg)
+            self.report(msg)
 
             while self.token_reader.medium_valid:
                 cost = self.matemat.getCost()
@@ -59,7 +61,7 @@ class Matepay(threading.Thread):
                     self.report('TIMEOUT', wait = 3)
                     return
                 elif cost != 0:
-                    self._logger.info('cost=%s' % cost)
+                    self._logger.info('cost=%.02f' % cost)
                     break
                 time.sleep(0.1)
             else: 
@@ -67,20 +69,23 @@ class Matepay(threading.Thread):
                 return
 
             try: 
-                transaction = session.cash(cost)
+                session.cash(cost)
 
                 if self.matemat.serve():
+                    session.collect()
                     self._logger.info('Serving')
-                    self.report('%.02f Eur left' % session.credit, wait = 3)
+                    msg = '%.02f Eur left' % (session.credit)
+                    self._logger.debug(msg)
+                    self.report(msg, wait = 3)
                 else:
                     self._logger.info('Failed to serve')
-                    self.report('Failed to serve!', 3)
-                    session.rollback(transaction)
+                    self.report('Failed to serve!', wait = 3)
+                    session.rollback()
 
                 if False: #not self.matemat.completeserve():
                     self._logger.info('Failed to complete serve')
-                    self.report('Failed to cserve!', 3)
-                    session.rollback(cost)
+                    self.report('Failed to cserve!', wait = 3)
+                    session.rollback()
 
             except nupay.NotEnoughCreditError as e:
                 self.report('%.02f Eur missing' % e[0][1], wait = 3)
