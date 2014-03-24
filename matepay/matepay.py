@@ -26,7 +26,7 @@ class Matepay(threading.Thread):
         self._logger = logging.getLogger(__name__)
         self.matemat = matemat.Matemat()
         self.token_reader = nupay.USBTokenReader()
-        self.collectors = [nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat')]
+        self.collectors = [nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')]
 
         while True:
             try:
