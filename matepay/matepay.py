@@ -12,16 +12,18 @@ import nupay
 import logging
 from decimal import Decimal
 
+testing = False
+
+if not testing:
+    import matemat as matemat
+else:
+    import matemat_sim as matemat
+
+
 class Matepay(threading.Thread):
-    def __init__(self, testing = False):
+    def __init__(self):
         threading.Thread.__init__(self)
         self._logger = logging.getLogger(__name__)
-        
-        if not testing:
-            import matemat as matemat
-        else:
-            import matemat_sim as matemat
-
         self.matemat = matemat.Matemat()
         self.token_reader = nupay.USBTokenReader()
         self.collectors = [nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat')]
@@ -70,17 +72,12 @@ class Matepay(threading.Thread):
 
             try: 
                 session.cash(cost)
-
-                if self.matemat.serve():
-                    session.collect()
-                    self._logger.info('Serving')
-                    msg = '%.02f Eur left' % (session.credit)
-                    self._logger.debug(msg)
-                    self.report(msg, wait = 3)
-                else:
-                    self._logger.info('Failed to serve')
-                    self.report('Failed to serve!', wait = 3)
-                    session.rollback()
+                self.matemat.serve()
+                session.collect()
+                self._logger.info('Serving')
+                msg = '%.02f Eur left' % (session.credit)
+                self._logger.debug(msg)
+                self.report(msg, wait = 3)
 
                 if False: #not self.matemat.completeserve():
                     self._logger.info('Failed to complete serve')
@@ -89,7 +86,10 @@ class Matepay(threading.Thread):
 
             except nupay.NotEnoughCreditError as e:
                 self.report('%.02f Eur missing' % e[0][1], wait = 3)
-                return
+            except matemat.ServeError:
+                self._logger.info('Failed to serve')
+                self.report('Failed to serve!', wait = 3)
+                session.rollback()
 
         #print("Waiting for medium to vanish")
         #while self.token_reader.medium_valid:

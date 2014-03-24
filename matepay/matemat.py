@@ -3,6 +3,9 @@ from decimal import Decimal
 import threading
 import sys
 
+class ServeError(Exception):
+    pass
+
 class Matemat(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -79,11 +82,8 @@ class Matemat(threading.Thread):
         #self.log.info('priceline=%s' % priceline)
         self.interface.writeMessage('C', "s"+str(self._last_priceline))
         ret = self._waitForReply(["sO","sN"])
-        if ret == False:
-            return False
-        if ret == "sN":
-            return False
-        return True
+        if ret == False or ret == "sN":
+            raise ServeError("Failed to serve")
 
     def completeserve(self):
         return self._waitForReply(["sD"])

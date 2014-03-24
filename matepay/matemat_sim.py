@@ -3,6 +3,9 @@ import sys
 import logging
 from decimal import Decimal
 
+class ServeError(Exception):
+    pass
+
 class Matemat:
     def __init__(self):
         self._logger = logging.getLogger(__name__)
@@ -16,7 +19,9 @@ class Matemat:
         return Decimal(sys.stdin.readline().strip())
 
     def serve(self):
-        return True
+        print 'success?'
+        if sys.stdin.readline().strip() != 'y':
+            raise ServeError("Failed to serve")
 
     def completeserve(self):
         return True
