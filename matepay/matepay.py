@@ -26,12 +26,12 @@ class Matepay(threading.Thread):
         self._logger = logging.getLogger(__name__)
         self.matemat = matemat.Matemat()
         self.token_reader = nupay.USBTokenReader()
-        self.collectors = [nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')]
+        self._collector = nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')
 
         while True:
             try:
                 self.matemat.writeLCD('connecting...')
-                self.session_manager = nupay.SessionManager(collectors = self.collectors)
+                self.session_manager = nupay.SessionManager(collectors = [self._collector])
                 break
             except nupay.SessionConnectionError as e:
                 self.report("upay unavailable", wait = 3)
@@ -39,8 +39,11 @@ class Matepay(threading.Thread):
     def go(self):
         self.matemat.writeLCD('OBEY AND CONSUME')
         
+        while not self._collector.connected:
+            self.report('upay unavailable', wait = 3)
+
         self._logger.debug("Waiting for purse")
-        
+
         while True: 
             try:
                 tokens = self.token_reader.read_tokens()
@@ -71,6 +74,7 @@ class Matepay(threading.Thread):
                 return
 
             try: 
+                assert(self._collector.connected)
                 session.cash(cost)
                 self.matemat.serve()
                 session.collect()
