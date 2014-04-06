@@ -10,7 +10,11 @@ import time
 import threading
 import nupay
 import logging
+import sys
+
 from decimal import Decimal
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
 
 testing = False
 
@@ -21,12 +25,12 @@ else:
 
 
 class Matepay(threading.Thread):
-    def __init__(self):
+    def __init__(self, cipher):
         threading.Thread.__init__(self)
         self._logger = logging.getLogger(__name__)
         self.matemat = matemat.Matemat()
         self.token_reader = nupay.USBTokenReader()
-        self._collector = nupay.MQTTCollector(server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')
+        self._collector = nupay.MQTTCollector(cipher = cipher, server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')
 
         while True:
             try:
@@ -122,6 +126,9 @@ class Matepay(threading.Thread):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    matepay = Matepay()
+    key_file = open(sys.argv[1],'r')
+    key = RSA.importKey(key_file.read())
+    cipher = PKCS1_OAEP.new(key)
+    matepay = Matepay(cipher = cipher)
     matepay.serve()
 
