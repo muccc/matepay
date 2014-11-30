@@ -8,7 +8,8 @@
 
 import time
 import threading
-import upay
+import upay.client
+import upay.common
 import logging
 import sys
 
@@ -29,15 +30,15 @@ class Matepay(threading.Thread):
         threading.Thread.__init__(self)
         self._logger = logging.getLogger(__name__)
         self.matemat = matemat.Matemat()
-        self.token_reader = upay.USBTokenReader()
-        self._collector = upay.MQTTCollector(cipher = cipher, server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')
+        self.token_reader = upay.common.USBTokenReader()
+        self._collector = upay.common.MQTTCollector(cipher = cipher, server = 'localhost', topic = '/collected/matmat', client_id = 'matemat')
 
         while True:
             try:
                 self.matemat.writeLCD('connecting...')
-                self.session_manager = upay.SessionManager(collectors = [self._collector])
+                self.session_manager = upay.client.SessionManager(collectors = [self._collector])
                 break
-            except upay.SessionConnectionError as e:
+            except upay.client.SessionConnectionError as e:
                 self.report("upay unavailable", wait = 3)
 
     def go(self):
@@ -52,7 +53,7 @@ class Matepay(threading.Thread):
             try:
                 tokens = self.token_reader.read_tokens()
                 break
-            except upay.NoTokensAvailableError:
+            except upay.common.NoTokensAvailableError:
                 time.sleep(1)
 
         self._logger.debug("Read %d tokens" % len(tokens))
@@ -92,7 +93,7 @@ class Matepay(threading.Thread):
                     self.report('Failed to cserve!', wait = 3)
                     session.rollback()
 
-            except upay.NotEnoughCreditError as e:
+            except upay.client.NotEnoughCreditError as e:
                 self.report('%.02f Eur missing' % e[0][1], wait = 3)
             except matemat.ServeError:
                 self._logger.info('Failed to serve')
@@ -116,9 +117,9 @@ class Matepay(threading.Thread):
         while True:
             try:
                 self.go()
-            except upay.SessionConnectionError as e:
+            except upay.client.SessionConnectionError as e:
                 self.report('upay unavailable', wait = 3)
-            except upay.SessionError as e:
+            except upay.client.SessionError as e:
                 self.report('upay terminated', wait = 3)
             except Exception as e:
                 self.report('see error log', wait = 3)
